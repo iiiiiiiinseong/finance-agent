@@ -1,0 +1,57 @@
+├── README.md
+├── apps
+│   └── streamlit_app
+│       └── app.py
+├── config.py
+├── data
+│   ├── embeddings
+│   │   ├── embedder.py
+│   │   └── index_builder.py
+│   ├── loader
+│   │   └── woori_loader.py
+│   ├── processed
+│   │   ├── faq_woori.py
+│   │   └── faq_woori_structured.jsonl
+│   └── raw_docs
+│       └── 자주하는질문(FAQ).txt
+├── docs
+│   └── prd.md
+├── index
+│   └── faq_faiss
+│       ├── index.faiss
+│       └── index.pkl
+├── infra
+│   └── docker
+├── make_sturture.py
+├── requirements.txt
+├── scripts
+│   ├── build_faq_index.py
+│   └── ragas_eval.py
+├── services
+│   ├── advisor
+│   │   └── profile_matcher.py
+│   ├── orchestrator
+│   │   ├── graph_builder.py
+│   │   └── router_node.py
+│   ├── postprocessor
+│   │   ├── rerank.py
+│   │   └── table_formatter.py
+│   ├── rag
+│   │   ├── deposit_loan_rag
+│   │   │   ├── chain.py
+│   │   │   └── schema.py
+│   │   ├── faq_rag
+│   │   │   ├── faq_chain.py
+│   │   │   └── retriever.py
+│   │   ├── fund_rag
+│   │   │   ├── chain.py
+│   │   │   └── schema.py
+│   │   └── insurance_rag
+│   │       ├── chain.py
+│   │       └── schema.py
+│   └── signup
+│       └── esign_client.py
+├── structure.txt
+└── tests
+    ├── index
+    └── test_e2e.ipynb
