@@ -1,10 +1,10 @@
-Finance Agent PoC
+# Finance Agent PoC
 
 
 우리은행의 FAQ만을 대상으로 RAG 파이프라인을 빠르게 검증-시연한다.
 LangChain + LangGraph + FAISS + OpenAI LLM, Streamlit UI를 사용하며 추후 예금·대출·보험·펀드 모듈로 확장 가능하도록 모듈 구조를 갖춘다.
 
-# 1. 프로젝트 구조
+## 1. 프로젝트 구조
 ```bash
 woori-finconcierge/
 ├─ apps/
@@ -30,7 +30,7 @@ woori-finconcierge/
 └─ README.md                   
 ```
 
-# 2. 핵심 모듈
+## 2. 핵심 모듈
 
 | 경로                                  | 역할                                    | 주요 포인트                                       |
 | ----------------------------------- | ------------------------------------- | -------------------------------------------- |
@@ -42,21 +42,21 @@ woori-finconcierge/
 | `apps/streamlit_app/app.py`         | 간단한 사용자 UI                            | 질문 입력 → LLM 답변 + 근거 표시                       |
 
 
-# 3. 사전 준비
+## 3. 사전 준비
  - OpenAI API Key – .env 파일에 OPENAI_API_KEY= 입력
  - 의존 라이브러리 설치
 ```bash
 pip install -r requirements.txt
 ```
 
-# 4. 환경 변수 예시 (.env)
+## 4. 환경 변수 예시 (.env)
 ```bash
 # 필수
 OPENAI_API_KEY=sk-********************************
 
 ```
 
-# 5. 인덱스 생성
+## 5. 인덱스 생성
 ```bash
 python scripts/build_faq_index.py
 ```
@@ -65,7 +65,7 @@ python scripts/build_faq_index.py
 - OpenAI Embeddings → FAISS Index 작성 → index/faq_faiss/ 저장
 - 이미 존재하면 재생성하지 않는다.
 
-# 6. Streamlit 데모 실행
+## 6. Streamlit 데모 실행
 ```bash
 streamlit run apps/streamlit_app/app.py # 프로젝트 루트 경로에서 실행
 ```
@@ -73,7 +73,7 @@ streamlit run apps/streamlit_app/app.py # 프로젝트 루트 경로에서 실�
 - LLM이 FAQ 컨텍스트를 인용해 즉시 답변
 - 근거 보기 토글로 검색된 context 확인
 
-# 7. End-to-End 테스트
+## 7. End-to-End 테스트
 ```bash
 jupyter notebook tests/test_e2e.ipynb
 ```
