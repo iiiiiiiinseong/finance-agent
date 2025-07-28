@@ -73,6 +73,9 @@ streamlit run apps/streamlit_app/app.py # 프로젝트 루트 경로에서 실�
 - LLM이 FAQ 컨텍스트를 인용해 즉시 답변
 - 근거 보기 토글로 검색된 context 확인
 
+## Demo
+![FAQ RAG Demo](.\docs\FAQ_Demo_high.gif)
+
 ## 7. End-to-End 테스트
 ```bash
 jupyter notebook tests/test_e2e.ipynb
