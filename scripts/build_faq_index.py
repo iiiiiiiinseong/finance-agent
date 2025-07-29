@@ -45,24 +45,3 @@ def build_index(source: Path = SOURCE_JSONL, out_dir: Path = INDEX_PATH) -> FAIS
 
 if __name__ == "__main__":
     build_index()
-
-
-# ROOT = Path.cwd().resolve().parent
-# sys.path.append(str(ROOT))
-                
-# DATA = ROOT / "data" / "processed" / "faq_woori_structured.jsonl"
-# OUT  = ROOT / "index" / "faq_faiss.index"
-# OUT.parent.mkdir(exist_ok=True, parents=True)
-
-# emb = OpenAIEmbeddings(model="text-embedding-3-small")   # 1/token cheap
-
-# docs = []
-# with DATA.open(mode="r", encoding="utf-8") as f:
-#     for line in f:
-#         row = json.loads(line)
-#         content = f"Q: {row['question']}\nA: {row['answer']}"
-#         docs.append(Document(page_content=content, metadata=row))
-
-# db = FAISS.from_documents(docs, emb)
-# db.save_local(str(OUT.with_suffix("")))
-# print("FAISS index saved:", OUT)
