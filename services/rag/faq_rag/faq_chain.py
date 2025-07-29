@@ -23,13 +23,6 @@ class FAQState(BaseModel):
     contexts: list[str] | None = None  # RAGAS용 리스트 컨텍스트
     answer: str  | None = None
 
-sys_prompt = (
-    "당신은 우리은행 FAQ 상담원입니다. 반드시 <context>의 사실만 사용해 간결하게 답하세요. "
-    "컨텍스트에 관련 정보가 하나라도 있으면 절대로 거절하지 마세요. "
-    "절차/경로/메뉴는 단계형(1. 2. 3.)으로 정리하세요. "
-    "근거가 불충분하면 '추가 확인 필요'라고 덧붙이되, 추측은 하지 마세요."
-)
-
 prompt = PromptTemplate.from_template(
     """
     당신은 우리은행 FAQ 전문 상담원입니다. <context>의 사실만 사용해 간결하게 답하세요.
