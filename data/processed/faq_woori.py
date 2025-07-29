@@ -1,4 +1,7 @@
-import json, re, pandas as pd, textwrap, pathlib
+import json, re, sys, pathlib
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from config import ROOT_DIR, DATA_DIR
 
 # FAQ txt → JSONL 변환
 # 스키마 설명 & 샘플 2 레코드
@@ -7,7 +10,7 @@ import json, re, pandas as pd, textwrap, pathlib
 # 후속 파이프라인 loader → embedder → FAISS/BM25 hybrid 인덱스
 
 # Load the txt file uploaded by the user
-txt_path = pathlib.Path("C:/Users/insung/Finance_Agent/data/raw_docs/자주하는질문(FAQ).txt")
+txt_path = ROOT_DIR / "data/raw_docs/자주하는질문(FAQ).txt"
 text = txt_path.read_text(encoding="utf-8")
 
 records = []
@@ -74,7 +77,7 @@ while i < len(lines):
     i += 1
 
 # Save to JSONL
-output_path = pathlib.Path("C:/Users/insung/Finance_Agent/data/processed/faq_woori_structured.jsonl")
+output_path = DATA_DIR / "faq_woori_structured.jsonl"
 
 with output_path.open("w", encoding="utf-8") as f:
     for rec in records:
