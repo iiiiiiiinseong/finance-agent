@@ -12,19 +12,31 @@ woori-finconcierge/
 │      └─ app.py
 ├─ data/
 │  ├─ processed/
+│  │   ├─ faq_woori.py
 │  │   └─ faq_woori_structured.jsonl
-├─ index/
-│  └─ faq_faiss/               # FAISS 인덱스 & 메타
-├─ scripts/
-│  └─ build_faq_index.py       # 인덱스 생성 스크립트
+│  └─ raw_docs
+│       ├── woori_deposit_trust_docs # 상품설명서
+│       └── 자주하는질문(FAQ).txt
+├─ index/                      # FAISS 인덱스 & 메타
+│  ├─ deposit_faiss           
+│  └─ faq_faiss/
+├─ scripts/                    # 인덱스 생성 스크립트
+│  ├─ build_deposit_index.py  
+│  └─ build_faq_index.py       
+│  └─ ragas_eval.py
 ├─ services/
 │  └─ rag/
-│      └─ faq_rag/
-│          ├─ retriever.py
-│          ├─ faq_chain.py
-│          └─ __init__.py
-├─ tests/
-│  └─ test_e2e.ipynb           # E2E 노트북 테스트
+│      ├─ faq_rag/
+│      │   ├─ __init__.py
+│      │   ├─ faq_chain.py
+│      │   └─ retriever.py
+│      └─ product_rag
+│          ├── __init__.py
+│          ├── chain.py
+│          └── retriever.py
+├─ tests/                      # E2E 노트북 테스트
+│   ├─ test_FAQ_rag_e2e.ipynb
+│   └─ test_product_rag_e2e.ipynb         
 ├─ config.py                   # 환경변수·상수 중앙 관리
 ├─ requirements.txt
 └─ README.md                   
