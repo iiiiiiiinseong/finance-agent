@@ -8,15 +8,24 @@
 │   │   ├── embedder.py
 │   │   └── index_builder.py
 │   ├── loader
+│   │   ├── __init__.py
+│   │   ├── product_loader.py
 │   │   └── woori_loader.py
 │   ├── processed
 │   │   ├── faq_woori.py
 │   │   └── faq_woori_structured.jsonl
 │   └── raw_docs
+│       ├── woori_deposit_trust_docs
+│       │   ├── PLM_P010000002_DA001_20250729093419000867.pdf
+│       │   │   ...
 │       └── 자주하는질문(FAQ).txt
 ├── docs
+│   ├── FAQ_Demo_high.gif
 │   └── prd.md
 ├── index
+│   ├── deposit_faiss
+│   │   ├── index.faiss
+│   │   └── index.pkl
 │   └── faq_faiss
 │       ├── index.faiss
 │       └── index.pkl
@@ -25,6 +34,7 @@
 ├── make_sturture.py
 ├── requirements.txt
 ├── scripts
+│   ├── build_deposit_index.py
 │   ├── build_faq_index.py
 │   └── ragas_eval.py
 ├── services
@@ -37,21 +47,27 @@
 │   │   ├── rerank.py
 │   │   └── table_formatter.py
 │   ├── rag
-│   │   ├── deposit_loan_rag
-│   │   │   ├── chain.py
-│   │   │   └── schema.py
 │   │   ├── faq_rag
+│   │   │   ├── __init__.py
 │   │   │   ├── faq_chain.py
 │   │   │   └── retriever.py
 │   │   ├── fund_rag
 │   │   │   ├── chain.py
 │   │   │   └── schema.py
-│   │   └── insurance_rag
+│   │   ├── insurance_rag
+│   │   │   ├── chain.py
+│   │   │   └── schema.py
+│   │   └── product_rag
+│   │       ├── __init__.py
 │   │       ├── chain.py
-│   │       └── schema.py
+│   │       └── retriever.py
 │   └── signup
 │       └── esign_client.py
 ├── structure.txt
 └── tests
     ├── index
-    └── test_e2e.ipynb
+    │   └── deposit_faiss
+    │       ├── index.faiss
+    │       └── index.pkl
+    ├── test_FAQ_rag_e2e.ipynb
+    └── test_product_rag_e2e.ipynb
