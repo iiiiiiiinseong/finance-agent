@@ -1,3 +1,5 @@
+# services/rag/faq_rag/__init__.py
+
 """
 FAQ RAG 패키지 초기화: retriever·graph를 외부에 공개.
 """
