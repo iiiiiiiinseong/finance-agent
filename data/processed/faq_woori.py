@@ -77,7 +77,7 @@ while i < len(lines):
     i += 1
 
 # Save to JSONL
-output_path = DATA_DIR / "faq_woori_structured.jsonl"
+output_path = DATA_DIR / "processed" / "faq_woori_structured.jsonl"
 
 with output_path.open("w", encoding="utf-8") as f:
     for rec in records:

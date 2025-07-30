@@ -19,7 +19,7 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
 )
 
-SOURCE_JSONL = DATA_DIR / "faq_woori_structured.jsonl"
+SOURCE_JSONL = DATA_DIR / "processed" / "faq_woori_structured.jsonl"
 INDEX_PATH = INDEX_DIR / "faq_faiss"
 
 def build_index(source: Path = SOURCE_JSONL, out_dir: Path = INDEX_PATH) -> FAISS:

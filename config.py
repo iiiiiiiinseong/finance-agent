@@ -22,5 +22,5 @@ LLM_MODEL: str = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
 EMBED_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 # 공통 경로
-DATA_DIR = ROOT_DIR / "data" / "processed"
+DATA_DIR = ROOT_DIR / "data"
 INDEX_DIR = ROOT_DIR / "index"
