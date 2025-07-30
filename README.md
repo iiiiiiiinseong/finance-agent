@@ -71,18 +71,19 @@ OPENAI_API_KEY=sk-********************************
 ## 5. 인덱스 생성
 ```bash
 python scripts/build_faq_index.py
+python scripts/build_deposit_index.py
 ```
 
-- data/processed/faq_woori_structured.jsonl 을 읽어 500-토큰 단위 Chunk + 메타데이터 생성
-- OpenAI Embeddings → FAISS Index 작성 → index/faq_faiss/ 저장
+- data를 읽어 Chunk + 메타데이터 생성
+- OpenAI Embeddings → FAISS Index 작성 → index/*_faiss/ 저장
 - 이미 존재하면 재생성하지 않는다.
 
 ## 6. Streamlit 데모 실행
 ```bash
 streamlit run apps/streamlit_app/app.py # 프로젝트 루트 경로에서 실행
 ```
-- 브라우저가 열리면 FAQ를 한국어로 입력
-- LLM이 FAQ 컨텍스트를 인용해 즉시 답변
+- 브라우저가 열리면 FAQ 혹은 상품질의를 한국어로 입력
+- LLM이 컨텍스트를 인용해 즉시 답변
 - 근거 보기 토글로 검색된 context 확인
 
 ## Demo
@@ -90,10 +91,11 @@ streamlit run apps/streamlit_app/app.py # 프로젝트 루트 경로에서 실�
 
 ## 7. End-to-End 테스트
 ```bash
-jupyter notebook tests/test_e2e.ipynb
+jupyter notebook test_FAQ_rag_e2e.ipynb
+jupyter notebook test_product_rag_e2e.ipynb
 ```
 셀 순서대로 실행하면
 
 - 환경변수 로딩 → 인덱스 로드/빌드
-- LangGraph 호출 → 샘플 질문 5개 응답
+- LangGraph 호출 → 샘플 질문 응답
 - ragas 평가로 relevancy/faithfulness/precision 리포트 확인
