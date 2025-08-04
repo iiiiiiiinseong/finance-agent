@@ -8,50 +8,75 @@ LangChain + LangGraph + FAISS + OpenAI LLM, Streamlit UI를 사용하며 추후 
 ```bash
 woori-finconcierge/
 ├─ apps/
-│  └─ streamlit_app/           # Streamlit 데모
+│  └─ streamlit_app/              # Streamlit 데모
 │      └─ app.py
 ├─ data/
 │  ├─ processed/
 │  │   ├─ faq_woori.py
 │  │   └─ faq_woori_structured.jsonl
-│  └─ raw_docs
-│       ├── woori_deposit_trust_docs # 상품설명서
-│       └── 자주하는질문(FAQ).txt
-├─ index/                      # FAISS 인덱스 & 메타
+│  └─ raw_docs                    # PDF·FAQ 원본
+├─ index/                         # FAISS 인덱스 & 메타
 │  ├─ deposit_faiss           
 │  └─ faq_faiss/
-├─ scripts/                    # 인덱스 생성 스크립트
+├─ scripts/
 │  ├─ build_deposit_index.py  
 │  └─ build_faq_index.py       
 │  └─ ragas_eval.py
 ├─ services/
-│  └─ rag/
-│      ├─ faq_rag/
-│      │   ├─ __init__.py
-│      │   ├─ faq_chain.py
-│      │   └─ retriever.py
-│      └─ product_rag
-│          ├── __init__.py
-│          ├── chain.py
-│          └── retriever.py
-├─ tests/                      # E2E 노트북 테스트
+│   ├─ rag/
+│   │   ├─ faq_rag/
+│   │   │   ├─ retriever.py
+│   │   │   └─ faq_chain.py
+│   │   └─ product_rag/
+│   │       ├─ retriever.py
+│   │       └─ chain.py
+│   ├─ orchestrator/
+│   │   └─ router_node.py         # GPT Classifier + Manager Agent + fallback
+│   ├─ fallback/
+│   │   └─ fallback_llm.py        # 범용 안내 LLM 노드
+│   └─ advisor/                   # 가입 Stub (TODO)
+│       └─ advisor_stub.py                   
+├─ tests/                         # E2E 노트북 테스트
 │   ├─ test_FAQ_rag_e2e.ipynb
-│   └─ test_product_rag_e2e.ipynb         
-├─ config.py                   # 환경변수·상수 중앙 관리
+│   ├─ test_product_rag_e2e.ipynb
+│   ├─ test_manager_agent.ipynb
+│   └─ RAGchecker_framework.ipynb       
+├─ config.py                      # 환경변수·상수 중앙 관리
 ├─ requirements.txt
 └─ README.md                   
 ```
 
 ## 2. 핵심 모듈
 
-| 경로                                  | 역할                                    | 주요 포인트                                       |
-| ----------------------------------- | ------------------------------------- | -------------------------------------------- |
-| `config.py`                         | `.env` 로드, 모델·경로·튜닝 파라미터 상수화          | `OPENAI_API_KEY`, `LLM_MODEL`, `FAQ_TOP_K` 등 |
-| `scripts/build_faq_index.py`        | FAQ JSONL → 임베딩 → FAISS 인덱스 저장        | 함수 `build_index()` 호출 가능                     |
-| `data/embeddings/index_builder.py`  | 인덱스가 존재하면 로드, 없으면 빌드                  | 모든 RAG 모듈이 공유                                |
-| `services/rag/faq_rag/retriever.py` | FAQ 전용 `VectorStoreRetriever`         | `k` 값은 `config.FAQ_TOP_K`                    |
-| `services/rag/faq_rag/faq_chain.py` | Pydantic `FAQState` + LangGraph 파이프라인 | `retrieve_node` → `generate_node`            |
-| `apps/streamlit_app/app.py`         | 간단한 사용자 UI                            | 질문 입력 → LLM 답변 + 근거 표시                       |
+| 경로 | 역할 | 주요 포인트 |
+|-----------------|------|------------|
+| <br>**환경변수** | | |
+| `config.py` | API 키·모델·경로·튜닝 파라미터 중앙 관리 | `OPENAI_API_KEY`, `LLM_MODEL`, `CHUNK_SIZE`, `FAQ_TOP_K` 등 |
+| <br>**데이터 ETL** | | |
+| `data/loader/product_loader.py` | PDF 상품설명서 → 섹션-단위 `Document` 리스트 | 정규식 헤더 추출·Mecab token chunking |
+| `data/processed/faq_woori_structured.jsonl` | FAQ 원본 32 건 구조화 | topic·subcategory 메타 포함 |
+| <br>**인덱스 빌드** | | |
+| `scripts/build_faq_index.py` | FAQ JSONL → Embedding → `index/faq_faiss/` | OpenAI `text-embedding-3-small` |
+| `scripts/build_deposit_index.py` | 예금/적금 PDF → `index/deposit_faiss/` | 배치 임베딩 `chunk_size=200` |
+| <br>**RAG – FAQ** | | |
+| `services/rag/faq_rag/retriever.py` | FAISS + BM25 하이브리드 검색 | `k`=`config.FAQ_TOP_K` |
+| `services/rag/faq_rag/faq_chain.py` | LangGraph `retrieve → generate` | 근거 인용번호 ①② 첨부 |
+| <br>**RAG – 예금/적금 상품설명** | | |
+| `services/rag/product_rag/retriever.py` | Deposit FAISS + BM25 검색 | 메타필터 `product_code` |
+| `services/rag/product_rag/chain.py` | LangGraph 파이프라인 | FAQ 답변과 동일 포맷 |
+| <br>**Fallback / Router** | | |
+| `services/fallback/fallback_llm.py` | 비금융·스몰톡 질문 안내 LLM 노드 | Kiwi few-shot 가드레일 |
+| `services/orchestrator/router_node.py` | GPT Classifer + Manager Agent + Fallback | FAQ·Product 병렬 호출 후 병합 |
+| <br>**Advisor (Stub)** | | |
+| `services/advisor/advisor_stub.py` | 가입 추천/전자서명 기능 MVP 자리 | 추후 MCP 연동 예정 |
+| <br>**UI / Demo** | | |
+| `apps/streamlit_app/app.py` | FAQ·상품 설명 탭, 예시 트리, 근거 토글 | `router_node.invoke()` 호출 |
+| <br>**평가 & 테스트** | | |
+| `tests/test_FAQ_rag_e2e.ipynb` | FAQ RAG → RAGAS 평가 | answer_relevancy·faithfulness |
+| `tests/test_product_rag_e2e.ipynb` | 상품설명 RAG E2E 테스트 | 동일 지표 |
+| `tests/RAGchecker_framework.ipynb` | rag-checker (Kiwi tokenizer) 한국어 faithfulness | Mecab/kiwipiepy 기반 |
+| `tests/test_manager_agent.ipynb` | Router+Manager 전체 흐름 검증 | fallback·advise 포함 |
+
 
 
 ## 3. 사전 준비
@@ -93,6 +118,7 @@ streamlit run apps/streamlit_app/app.py # 프로젝트 루트 경로에서 실�
 ```bash
 jupyter notebook test_FAQ_rag_e2e.ipynb
 jupyter notebook test_product_rag_e2e.ipynb
+jupyter notebook test_manager_agent
 ```
 셀 순서대로 실행하면
 
