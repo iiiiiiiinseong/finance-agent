@@ -5,24 +5,32 @@ Streamlit FAQ RAG App (Chat UI)
 root에서 실행. streamlit run apps/streamlit_app/app.py
 """
 from pathlib import Path
-import sys, json, collections
+import sys, json, collections, io, re, csv, textwrap, pandas as pd
+import pprint
 import streamlit as st
+from openai import OpenAI
+from langchain_community.document_loaders import PyMuPDFLoader
 from dotenv import load_dotenv
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from services.rag.faq_rag.faq_chain import graph
-from config import OPENAI_API_KEY
+from services.orchestrator.router_node import invoke as router_invoke
+from config import LLM_MODEL, OPENAI_API_KEY
 
 # ---- 초기화 -------------------------------------------------------
 load_dotenv(Path(__file__).parents[2] / ".env")
 assert OPENAI_API_KEY, "OPENAI_API_KEY is not set in .env"
 
-st.set_page_config(page_title="우리은행 FAQ 챗봇 🏦", page_icon="🏦", layout="wide")
-st.title("우리은행 FAQ RAG 데모 🏦")
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+st.set_page_config(page_title="우리은행 AI 컨시어지 챗봇 🏦", page_icon="🏦", layout="wide")
+st.title("우리은행 AI 컨시어지 데모 🏦")
 st.markdown(
-    "우리은행 FAQ 관련 질문에 답해드립니다. "
-    "왼쪽 사이드바에서 **[주제 ▸ 세부항목 ▸ 예시 질문]**을 골라보거나, 아래 입력창에 직접 질문을 입력해 보세요."
+    """
+    우리은행 FAQ, 예금/적금, 입출금 상품 관련 질문에 답해드립니다.
+
+    왼쪽 사이드바에서 FAQ 예시 질문을 골라보거나, 맞춤 상품을 찾아보세요.
+    """
 )
 
 # ---- Helper -------------------------------------------------------
@@ -52,6 +60,95 @@ def load_example_tree():
 
 EXAMPLE_TREE = load_example_tree()
 
+@st.cache_resource
+def load_meta_df():
+    path = Path(__file__).resolve().parents[2] / "data" / "processed" / "product_deposit.jsonl"
+    return pd.read_json(path, lines=True)
+
+META_DF = load_meta_df()
+
+# 추천 함수
+def recommend(profile: dict, top_n: int = 3):
+    df = META_DF
+    # 필터: 카테고리·기간·방식 등 (단순 예시)
+    if profile["dtype"]:
+        df = df[df.product_category.str.contains(profile["dtype"])]
+    if profile["term"]:
+        df = df[df.term_options.apply(lambda opts: profile["term"] in opts)]
+    df = df.sort_values("max_rate", ascending=False).head(top_n)
+    return df.reset_index(drop=True)
+
+def _call_gpt_csv(raw: str) -> str:
+    sys =  (
+    "너는 은행 상품설명서 분석 봇이다.\n"
+    "- 반드시 두 열 CSV(항목,내용)로 출력한다.\n"
+    "- 행은 [금리, 중도해지, 세율, 우대 조건] 중 최소 2가지는 포함해야 한다.\n"
+    "- 같은 항목이 여러 줄이면 하나로 합쳐도 된다.\n"
+    "- 세율·세금·우대이율 설명이 섞여도 열 개수는 2로 맞춘다."
+)
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role":"system","content":sys},
+                  {"role":"user","content":textwrap.shorten(raw, 9000)}],
+        temperature=0,
+        response_format={"type":"text"},
+        max_tokens=500,
+    ).choices[0].message.content.strip("` \n")
+
+    # debug_messages=[{"role":"system","content":sys},
+    # {"role":"user","content":textwrap.shorten(raw, 9000)}]
+    # print('='*100)
+    # pprint.pp(debug_messages)
+    # print('='*100)
+    return resp
+
+@st.cache_data(show_spinner=False)
+def parse_table(pdf_path: str) -> pd.DataFrame:
+    """
+    거래 조건 섹션을 2-열(항목·내용) DataFrame 표준화.
+    - LLM CSV 행별 열 수 달라도 처리
+    - 실패 시 regex fallback
+    """
+    # 1) PDF 첫 3쪽 텍스트 로드 (PyMuPDF)
+    pages = PyMuPDFLoader(pdf_path).load()[:3]
+    raw = "\n".join(p.page_content for p in pages)
+
+    # 2) LLM 프롬프트 → CSV
+    try:
+        csv_text = _call_gpt_csv(raw)
+        # pprint.pp(csv_text) # 디버깅 용
+        rows = list(csv.reader(io.StringIO(csv_text)))
+
+        # 유효한 레코드만 추출 (두 칸 이상인 경우만)
+        records = []
+        for row in rows:
+            if len(row) < 2:
+                continue
+
+            item = row[0].strip()
+            content_list = []
+            for cell in row[1:]:
+                content_list.append(cell.strip())
+            content = " ".join(content_list)
+
+            records.append((item, content))
+
+        if not records:
+            raise ValueError("empty")
+
+        # 데이터프레임 생성 및 인덱스 리셋
+        df = pd.DataFrame(records, columns=["항목", "내용"])
+        return df.reset_index(drop=True)
+    
+    except Exception as e:
+        # 3) regex fallback (금리·세율·중도해지 라인만)
+        pattern = r"(금리[^:\n]*[:\s]\s*[^\n]{1,80}|세율[^:\n]*[:\s]\s*[^\n]{1,80}|중도해지[^:\n]*[:\s]\s*[^\n]{1,80})"
+        rows = re.findall(pattern, raw)
+        if not rows:
+            return pd.DataFrame()  # 빈 DF → 추출 실패 처리
+        data = [r.split(maxsplit=1) for r in rows]
+        df = pd.DataFrame(data, columns=["항목","내용"])
+        return df
 
 # ---- 세션 스테이트 ------------------------------------------------
 if "history" not in st.session_state:
@@ -60,17 +157,26 @@ if "last_context" not in st.session_state:
     st.session_state.last_context = ""
 
 def run_query(q: str):
-    """그래프 실행 + 히스토리/컨텍스트 저장"""
-    st.session_state.history.append({"role": "user", "content": q})
+    """그래프 실행 + 히스토리/컨텍스트 저장"""    
+    st.session_state.history.append({"role":"user","content":q})
     with st.spinner("AI가 답변을 생성 중입니다..."):
-        res = graph.invoke({"question": q})
-    answer = res.get("answer", "죄송합니다. 답변을 준비 중입니다.")
-    st.session_state.history.append({"role": "assistant", "content": answer})
-    st.session_state.last_context = res.get("context", "") or ""
+        res = router_invoke(q)
+    answer = res.get("answer","죄송합니다. 답변을 준비 중입니다.")
+    st.session_state.history.append({"role":"assistant","content":answer})
+    st.session_state.last_context = res.get("context","")
+
+    # advise 라벨이면 추천 표 자동 펼치기
+    if "가입 상담" in answer or "추천" in answer:
+        st.sidebar.write("### 추천 결과는 사이드바를 확인하세요!")
+        # 첫 번째 추천 상품 표 → 마크다운
+        first_pdf = rec_df.iloc[0]["pdf_path"]
+        tbl_md = parse_table(first_pdf).head(8).to_markdown(index=False)
+        answer += "\n\n**주요 조건 요약**\n" + tbl_md
+        st.session_state.history[-1]["content"] = answer
 
 # ---- 사이드바: 예시 질문 ------------------------------------------
 with st.sidebar:
-    st.header("예시 질문")
+    st.header("FAQ 예시 질문")
     for topic, sub_dict in EXAMPLE_TREE.items():
         with st.expander(topic, expanded=False):
             for subcat, q_list in sub_dict.items():
@@ -79,6 +185,64 @@ with st.sidebar:
                     btn_key = f"ex_{topic}_{subcat}_{idx}"
                     if st.button(q, key=btn_key):
                         run_query(q)
+
+# ---- 사이드바: 조건 수집 & 추천 표 ------------------------------------------
+with st.sidebar:
+    st.header("맞춤 적금/예금 추천")
+
+    # 1) 조건 입력 폼
+    with st.form("cond_form"):
+        amt   = st.number_input("월 납입액(만원)", 1, 1000, 30)
+        term  = st.selectbox("기간", ["6개월","1년","2년","3년","5년"])
+        dtype = st.radio("상품 유형", ["적금", "예금", "입출금통장"], horizontal=True)
+        submitted = st.form_submit_button("추천 받기")
+    if submitted:
+        st.session_state.profile = {"amt": amt, "term": term, "dtype": dtype}
+
+    # 2) 추천 결과 표시
+    if "profile" in st.session_state:
+        rec_df = recommend(st.session_state.profile)
+
+        # 1) 화면엔 3개 열만
+        st.subheader("추천 상품 Top 3")
+        st.dataframe(rec_df[["product", "max_rate", "term_options"]])
+
+        # 2) 버튼 클릭용 — rec_df 전체 Series 사용
+        for _, row in rec_df.iterrows():
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown(f"**{row['product']}** &nbsp; *(최대금리&nbsp;{row['max_rate']}%)*")
+
+            with col2:
+                pdf_path = row.get("pdf_path")
+                if isinstance(pdf_path, str) and Path(pdf_path).exists():
+                    with open(pdf_path, "rb") as fp:
+                        st.download_button(
+                            label="PDF 다운로드",
+                            data=fp.read(),
+                            file_name=Path(pdf_path).name,
+                            mime="application/pdf",
+                            key=f"dl_{row['product_code']}",
+                        )
+                else:
+                    st.caption("PDF 준비 중")
+
+        # 조건 비교 표 (최대 3개)
+        if len(rec_df):
+            st.write("### 상품별 거래 조건 요약")
+            tabs = st.tabs([r["product"] for _, r in rec_df.iterrows()])
+            for tab, (_, r) in zip(tabs, rec_df.iterrows()):
+                with tab:
+                    with st.spinner("거래 조건을 불러오는 중..."):
+                        table_df = parse_table(r["pdf_path"])
+                    if table_df.empty:
+                        st.info("거래 조건 표를 자동으로 추출하지 못했습니다. PDF를 참고해 주세요.")
+                    else:
+                        if "항목" not in table_df.columns or "내용" not in table_df.columns:
+                            st.table(table_df.head(10))
+                        else:
+                            focus = table_df[table_df["항목"].str.contains("금리|중도해지|세율", na=False)]  # 필터링 항목은 변경 가능
+                            st.table(focus if not focus.empty else table_df.head(10))
 
 # ---- 사용자 입력 ----------------------------------------------------
 placeholder_example = ""
@@ -89,7 +253,7 @@ except StopIteration:
 
 query = st.chat_input(placeholder=f"예) {placeholder_example}", key="chat_input")
 if query:
-    run_query(query)
+        run_query(query)
 
 
 # ---- 대화 내역 표시 ------------------------------------------------

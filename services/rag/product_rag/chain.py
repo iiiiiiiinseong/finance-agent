@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 
 from config import LLM_MODEL, OPENAI_API_KEY
 from .retriever import DepositRetriever
+from .retriever import _infer_category
 
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -41,7 +42,10 @@ llm = ChatOpenAI(model=LLM_MODEL,
 retriever = DepositRetriever(k=3)
 
 def retrieve_node(state: ProductQA):
-    docs = retriever(state.question)
+    # 질문에서 예금/적금/통장 … 카테고리 추론
+    cat = _infer_category(state.question)
+    # 카테고리 지정 필터 검색
+    docs = retriever(state.question, category=cat)
     ctx_list = [d.page_content for d in docs]
     return {
         "question": state.question,

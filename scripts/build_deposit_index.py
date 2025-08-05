@@ -23,7 +23,7 @@ SOURCE_JSONL = DATA_DIR / "raw_docs" / "woori_deposit_trust_docs"
 INDEX_PATH = INDEX_DIR / "deposit_faiss"
 
 def build_index(source: Path = SOURCE_JSONL, out_dir: Path = INDEX_PATH) -> FAISS:
-    DOCS = load_docs(Path(SOURCE_JSONL))
+    DOCS = load_docs(SOURCE_JSONL, save_jsonl=True)   # jsonl 저장
     emb = OpenAIEmbeddings(
         model=EMBED_MODEL,
         chunk_size=200,
