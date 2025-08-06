@@ -16,6 +16,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from services.orchestrator.router_node import invoke as router_invoke
 from config import LLM_MODEL, OPENAI_API_KEY
+import base64
 
 # ---- 초기화 -------------------------------------------------------
 load_dotenv(Path(__file__).parents[2] / ".env")
@@ -35,6 +36,24 @@ st.markdown(
 
 # ---- Helper -------------------------------------------------------
 DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "faq_woori_structured.jsonl"
+
+def pdf_viewer(pdf_path: str, height: int = 700):
+    """
+    주어진 경로의 PDF를 Base64로 인코딩하고, <embed> 태그를 사용하여 표시합니다.
+    파일을 찾을 수 없는 경우 오류 메시지를 표시합니다.
+    """
+    try:
+        with open(pdf_path, "rb") as f:
+            base64_pdf = base64.b64encode(f.read()).decode("utf-8")
+        
+        pdf_display = (
+            f'<embed src="data:application/pdf;base64,{base64_pdf}" '
+            f'width="100%" height="{height}" type="application/pdf">'
+        )
+        st.markdown(pdf_display, unsafe_allow_html=True)
+
+    except FileNotFoundError:
+        st.error("오류: PDF 파일을 찾을 수 없습니다.")
 
 def default_subdict():
     return collections.defaultdict(list)
@@ -87,7 +106,7 @@ def _call_gpt_csv(raw: str) -> str:
     "- 세율·세금·우대이율 설명이 섞여도 열 개수는 2로 맞춘다."
 )
     resp = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=LLM_MODEL,
         messages=[{"role":"system","content":sys},
                   {"role":"user","content":textwrap.shorten(raw, 9000)}],
         temperature=0,
@@ -155,6 +174,8 @@ if "history" not in st.session_state:
     st.session_state.history = []  # [{"role": "user"/"assistant", "content": str}]
 if "last_context" not in st.session_state:
     st.session_state.last_context = ""
+if "view_pdf" not in st.session_state:
+    st.session_state.view_pdf = None 
 
 def run_query(q: str):
     """그래프 실행 + 히스토리/컨텍스트 저장"""    
@@ -209,7 +230,7 @@ with st.sidebar:
 
         # 2) 버튼 클릭용 — rec_df 전체 Series 사용
         for _, row in rec_df.iterrows():
-            col1, col2 = st.columns([3, 1])
+            col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
                 st.markdown(f"**{row['product']}** &nbsp; *(최대금리&nbsp;{row['max_rate']}%)*")
 
@@ -224,6 +245,16 @@ with st.sidebar:
                             mime="application/pdf",
                             key=f"dl_{row['product_code']}",
                         )
+                else:
+                    st.caption("PDF 준비 중")
+            
+            with col3:
+                pdf_path = row.get("pdf_path")
+                if isinstance(pdf_path, str) and Path(pdf_path).exists():
+                    with open(pdf_path, "rb") as fp:
+                        if st.button("보기", key=f"view_{row['product_code']}"):
+                            with st.spinner("PDF 불러오는 중…"):
+                                st.session_state.view_pdf = pdf_path
                 else:
                     st.caption("PDF 준비 중")
 
@@ -261,6 +292,14 @@ for msg in st.session_state.history:
     role = msg["role"]
     with st.chat_message(role):
         st.markdown(msg["content"])
+
+# ---- PDF 뷰어 -------------------------------------------------
+if st.session_state.view_pdf:
+    st.markdown("---")
+    with st.expander("📄 상품설명서 미리보기"):
+        with st.container(height=720, border=True):
+            with st.spinner("PDF 로딩 중…"):
+                pdf_viewer(st.session_state.view_pdf, height=700)
 
 # ---- 근거 보기 -----------------------------------------------------
 if st.session_state.history and st.session_state.history[-1]["role"] == "assistant":
