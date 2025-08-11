@@ -1,7 +1,7 @@
 # apps/streamlit_app/app.py
 
 """
-Streamlit FAQ RAG App (Chat UI)
+Streamlit finance App (Chat UI)
 root에서 실행. streamlit run apps/streamlit_app/app.py
 """
 from pathlib import Path
@@ -15,11 +15,12 @@ from dotenv import load_dotenv
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from services.orchestrator.router_node import invoke as router_invoke
+from services.email.adapter import send_email_with_resp
 from config import LLM_MODEL, OPENAI_API_KEY
 import base64
 
 # ---- 초기화 -------------------------------------------------------
-load_dotenv(Path(__file__).parents[2] / ".env")
+load_dotenv(dotenv_path=Path(__file__).parents[2] / ".env.streamlit")
 assert OPENAI_API_KEY, "OPENAI_API_KEY is not set in .env"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -176,6 +177,8 @@ if "last_context" not in st.session_state:
     st.session_state.last_context = ""
 if "view_pdf" not in st.session_state:
     st.session_state.view_pdf = None 
+if "user_email" not in st.session_state:
+    st.session_state.user_email = ""
 
 def run_query(q: str):
     """그래프 실행 + 히스토리/컨텍스트 저장"""    
@@ -213,67 +216,93 @@ with st.sidebar:
 
     # 1) 조건 입력 폼
     with st.form("cond_form"):
-        amt   = st.number_input("월 납입액(만원)", 1, 1000, 30)
-        term  = st.selectbox("기간", ["6개월","1년","2년","3년","5년"])
+        amt = st.number_input("월 납입액(만원)", 1, 1000, 30)
+        term = st.selectbox("기간", ["6개월", "1년", "2년", "3년", "5년"])
         dtype = st.radio("상품 유형", ["적금", "예금", "입출금통장"], horizontal=True)
         submitted = st.form_submit_button("추천 받기")
     if submitted:
         st.session_state.profile = {"amt": amt, "term": term, "dtype": dtype}
 
-    # 2) 추천 결과 표시
+    def _on_email_change():
+        email_val = st.session_state.get("_email_input", "").strip()
+        st.session_state.user_email = email_val
+
+    st.divider()
+    st.subheader("상품설명서 메일 수신")
+    st.text_input(
+        "받으실 이메일 주소",
+        key="_email_input",
+        value=st.session_state.get("user_email", ""),
+        placeholder="you@example.com",
+        on_change=_on_email_change,
+    )
+    
+    # 2) 추천 결과 표시 (개선된 코드)
     if "profile" in st.session_state:
         rec_df = recommend(st.session_state.profile)
 
-        # 1) 화면엔 3개 열만
         st.subheader("추천 상품 Top 3")
-        st.dataframe(rec_df[["product", "max_rate", "term_options"]])
+        st.dataframe(
+            rec_df[["product", "max_rate", "term_options"]],
+            hide_index=True,
+            use_container_width=True,
+        )
 
-        # 2) 버튼 클릭용 — rec_df 전체 Series 사용
+        st.divider()
+
         for _, row in rec_df.iterrows():
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                st.markdown(f"**{row['product']}** &nbsp; *(최대금리&nbsp;{row['max_rate']}%)*")
+            # 상품명과 금리 표시
+            st.markdown(f"**{row['product']}** &nbsp; *(최대금리&nbsp;{row['max_rate']}%)*")
 
-            with col2:
-                pdf_path = row.get("pdf_path")
-                if isinstance(pdf_path, str) and Path(pdf_path).exists():
+            # PDF 경로 및 존재 여부를 한 번만 확인
+            pdf_path_str = row.get("pdf_path")
+            pdf_exists = isinstance(pdf_path_str, str) and Path(pdf_path_str).exists()
+
+            # 3개의 컬럼 생성
+            col1, col2, col3 = st.columns(3)
+
+            if pdf_exists:
+                pdf_path = Path(pdf_path_str)
+                
+                # --- PDF 다운로드 버튼 ---
+                with col1:
                     with open(pdf_path, "rb") as fp:
                         st.download_button(
-                            label="PDF 다운로드",
+                            label="PDF다운로드",
                             data=fp.read(),
-                            file_name=Path(pdf_path).name,
+                            file_name=pdf_path.name,
                             mime="application/pdf",
                             key=f"dl_{row['product_code']}",
+                            use_container_width=True,
                         )
-                else:
-                    st.caption("PDF 준비 중")
-            
-            with col3:
-                pdf_path = row.get("pdf_path")
-                if isinstance(pdf_path, str) and Path(pdf_path).exists():
-                    with open(pdf_path, "rb") as fp:
-                        if st.button("보기", key=f"view_{row['product_code']}"):
-                            with st.spinner("PDF 불러오는 중…"):
-                                st.session_state.view_pdf = pdf_path
-                else:
-                    st.caption("PDF 준비 중")
-
-        # 조건 비교 표 (최대 3개)
-        if len(rec_df):
-            st.write("### 상품별 거래 조건 요약")
-            tabs = st.tabs([r["product"] for _, r in rec_df.iterrows()])
-            for tab, (_, r) in zip(tabs, rec_df.iterrows()):
-                with tab:
-                    with st.spinner("거래 조건을 불러오는 중..."):
-                        table_df = parse_table(r["pdf_path"])
-                    if table_df.empty:
-                        st.info("거래 조건 표를 자동으로 추출하지 못했습니다. PDF를 참고해 주세요.")
-                    else:
-                        if "항목" not in table_df.columns or "내용" not in table_df.columns:
-                            st.table(table_df.head(10))
+                
+                # --- PDF 보기 버튼 ---
+                with col2:
+                    if st.button("미리보기", key=f"view_{row['product_code']}", use_container_width=True):
+                        st.session_state.view_pdf = pdf_path_str
+                
+                # --- 메일로 전송 버튼 ---
+                with col3:
+                    can_send = bool(st.session_state.get("user_email"))
+                    if st.button("메일로", key=f"mail_{row['product_code']}", disabled=not can_send, use_container_width=True):
+                        with st.spinner("메일 전송 중…"):
+                            resp = send_email_with_resp(
+                                to_addr=st.session_state.user_email,
+                                subject=f"[우리은행] {row['product']} 상품설명서",
+                                pdf_path=pdf_path_str,
+                                text="첨부된 상품설명서를 확인해 주세요.",
+                                html="첨부된 상품설명서를 확인해 주세요.",
+                            )
+                        if resp.ok:
+                            st.success("발송 완료!")
                         else:
-                            focus = table_df[table_df["항목"].str.contains("금리|중도해지|세율", na=False)]  # 필터링 항목은 변경 가능
-                            st.table(focus if not focus.empty else table_df.head(10))
+                            code = resp.status_code
+                            st.error(f"전송 실패({code}). {resp.detail or ''}")
+            else:
+                # PDF 파일이 없을 경우
+                st.caption("PDF 파일 준비 중입니다.")
+            
+            st.markdown("---") # 상품별 구분선
 
 # ---- 사용자 입력 ----------------------------------------------------
 placeholder_example = ""
