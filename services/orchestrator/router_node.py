@@ -249,11 +249,21 @@ def _merge_sources(question: str, label: str,
 
 def manager_agent(question: str, label: str) -> Dict:
     jobs = []
-    if label in {"faq", "product", "advise"}:
-        jobs += [("faq",  _run_faq)]
-    if label in {"product", "advise"}:
-        jobs += [("prod", _run_prod)]
+    if label == "faq":
+        jobs.append(("faq", _run_faq))
+    
+    elif label == "product":
+        jobs.append(("prod", _run_prod))
 
+    elif label == "advise":
+        # 두 RAG를 모두 활용해 풍부한 컨텍스트를 확보합니다.
+        jobs.append(("faq", _run_faq))
+        jobs.append(("prod", _run_prod))
+
+    #  routing llm의 예외처리
+    if not jobs:
+        return {"answer": "죄송합니다, 해당 질문의 유형을 처리할 수 없습니다.", "context": ""}
+    
     # 병렬 실행
     with ThreadPoolExecutor(max_workers=len(jobs)) as exe:
         results = [exe.submit(fn, question) for _, fn in jobs]
