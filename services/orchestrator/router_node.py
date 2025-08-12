@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, ValidationError
 from services.fallback import fallback_llm 
 from services.rag.faq_rag import graph as FAQ_GRAPH
 from services.rag.product_rag import graph as PROD_GRAPH
-from services.advisor.advisor_stub import advise
+from services.advisor.advisor import advise
 from config import OPENAI_API_KEY, LLM_MODEL
 
 # ────────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ LLM_MANAGER = ChatOpenAI(
     openai_api_key = OPENAI_API_KEY,
 )
 # ────────────────────────────────────────────────────────────────
-# 1. 대화 이력 기반 질문 재구성 (신규 추가)
+# 1. 대화 이력 기반 질문 재구성
 REWRITE_PROMPT = SystemMessage(content=(
     "당신은 금융 상품 챗봇 AI와 유저의 대화 히스토리를 기반으로 마지막 유저의 질문을 분석하여 금융상품 RAG 통합엔진이 문서를 잘 찾을 수 있게 질문을 구체적으로 재작성하세요."
     "재작성된 질문은 길이가 너무 길어지지 않게 하며, 유저가 원히는 핵심이 무엇인지 명확하게 들어나는 문장이어야 합니다."
@@ -77,7 +77,7 @@ REWRITE_FEW_SHOTS = [
         "last_question": "그럼 기본 금리랑 우대금리는 어떻게 되는지 알려줘",
         "rewritten": "우리 SUPER 주거래 적금의 기본 금리와 우대금리는 어떻게 되나요?"
     },
-    # Case 3: '선택 후 모호함' 해결 (신규 추가)
+    # Case 3: '선택 후 모호함' 해
     {
         "history": [
             HumanMessage(content="우리은행 적금 추천해줘"),
@@ -86,7 +86,7 @@ REWRITE_FEW_SHOTS = [
         "last_question": "우대금리 조건이 어떻게 되는지도 설명해줘",
         "rewritten": "'우리 퍼스트 적금2', '급여형 적금', '청약저축형 적금'의 우대금리 조건을 각각 비교 설명해주세요."
     },
-    # Case 4: 독립적인 질문 (변경 없음)
+    # Case 4: 독립적인 질문
     {
         "history": [],
         "last_question": "ISA 계좌가 뭔가요?",
@@ -157,7 +157,7 @@ def _build_route_messages(q: str) -> list:
         "가능한 라벨: "
         "faq(이용·절차·보안 FAQ), "
         "product(상품 설명서 기반 질의), "
-        "advise(맞춤 추천·비교), "
+        "advise(가입상담·맞춤 추천·비교), "
         "fallback(기타 일반 질문). "
         "반드시 JSON {\"label\":\"…\"} 하나만 반환."
     )
@@ -218,6 +218,7 @@ SYSTEM_MANAGER = SystemMessage(content=(
     "   - **핵심 요약**: 사용자의 질문에 대한 가장 중요한 결론을 한두 문장으로 먼저 제시한다.\n"
     "   - **상세 설명**: Source 내용을 바탕으로 구체적인 정보를 항목별로 나누어 명확하게 설명한다. (상품의 경우 특징, 금리, 조건, 유의사항 등)\n"
     "   - **연관 질문 제안**: 사용자가 다음으로 궁금해할 만한 질문 3가지를 제안하여 대화를 유도한다.\n\n"
+    "   - **가입 상담 제안**: 자연스럽게 금융상품의 가입 상담 대화를 진행할 수 있게 사용자에게 '해당 상품에 대한 상담을 원하시면 '상담해줘'라고 채팅을 보내주세요.'라며 상담을 유도한다.\n\n"
     "2. **근거 인용**: 답변 내용의 신뢰도를 위해, 문장 끝에 참조한 Source 번호를 `(출처: ①)` 와 같이 명확히 표기한다. 여러 Source를 조합했다면 `(출처: ①, ②)` 형식으로 쓴다.\n\n"
     "3. **라벨별 특수 처리**:\n"
     "   - `label: product`: 상품의 핵심적인 특징을 중심으로 설명한다.\n"
@@ -244,7 +245,7 @@ def _merge_sources(question: str, label: str,
         HumanMessage(content=f"label: {label}\n\n질문: {question}")]
     
     final = LLM_MANAGER.invoke(msgs).content
-    return {"answer": final, "context": merged_ctx[:4000]}
+    return {"answer": final, "context": merged_ctx[:5000]}
 
 def manager_agent(question: str, label: str) -> Dict:
     jobs = []
@@ -266,7 +267,7 @@ def manager_agent(question: str, label: str) -> Dict:
 
 def invoke(question: str, history: List[Dict[str, Any]] = None) -> Dict:
     """
-    대화 이력을 받아 질문을 재구성한 후 라우팅 및 답변 생성을 수행.
+    대화 이력을 받아 질문을 재구성하고 라우팅 및 답변 생성을 수행.
     """
     history = history or []
     
@@ -283,10 +284,10 @@ def invoke(question: str, history: List[Dict[str, Any]] = None) -> Dict:
     if label == "product":
         return manager_agent(rewritten_question, label="product")
     if label == "advise":
-        base = manager_agent(rewritten_question, label="advise")
-        extra = advise(rewritten_question)
-        return {
-            "answer": base["answer"] + "\n\n---\n" + extra["answer"],
-            "context": base["context"]
-        }    
+        # 먼저 상품 RAG를 호출하여 컨텍스트 확보
+        product_rag_result = _run_prod(rewritten_question)
+        product_context = product_rag_result.get("context", "")
+        
+        # 원본 질문과 전체 히스토리, RAG 컨텍스트 전달
+        return advise(question, history, product_context)    
     return fallback_llm.invoke(question)
