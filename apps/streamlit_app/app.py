@@ -38,6 +38,12 @@ st.markdown(
 # ---- Helper -------------------------------------------------------
 DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "faq_woori_structured.jsonl"
 
+def create_safe_filename(product_name: str) -> str:
+    """상품명을 안전한 파일명으로 변환합니다 (공백->_, 특수문자 제거)."""
+    safe_name = re.sub(r'[\\/*?:"<>|]', "", product_name)
+    safe_name = safe_name.replace(" ", "_")
+    return f"{safe_name}_상품설명서.pdf"
+
 def pdf_viewer(pdf_path: str, height: int = 700):
     """
     주어진 경로의 PDF를 Base64로 인코딩하고, <embed> 태그를 사용하여 표시합니다.
@@ -179,6 +185,8 @@ if "view_pdf" not in st.session_state:
     st.session_state.view_pdf = None 
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
+if "signup_context" not in st.session_state:
+    st.session_state.signup_context = None
 
 def run_query(q: str):
     """그래프 실행 + 히스토리/컨텍스트 저장"""
@@ -194,13 +202,9 @@ def run_query(q: str):
     st.session_state.history.append({"role": "assistant", "content": answer})
     st.session_state.last_context = res.get("context", "")
 
-    # advise 라벨이면 추천 표 자동 펼치기
-    if "가입 상담" in answer or "추천" in answer:
-        st.sidebar.write("### 추천 결과는 사이드바를 확인하세요!")
-        first_pdf = rec_df.iloc[0]["pdf_path"]
-        tbl_md = parse_table(first_pdf).head(8).to_markdown(index=False)
-        answer += "\n\n**주요 조건 요약**\n" + tbl_md
-        st.session_state.history[-1]["content"] = answer
+    # '가입 상담 시작' 액션이 감지되면, 컨텍스트를 세션에 저장
+    if res.get("action") == "request_email_for_signup":
+        st.session_state.signup_context = res.get("signup_context")
 
 # ---- 사이드바: 예시 질문 ------------------------------------------
 with st.sidebar:
@@ -240,8 +244,33 @@ with st.sidebar:
         placeholder="you@example.com",
         on_change=_on_email_change,
     )
+
+    if st.session_state.signup_context:
+        st.divider()
+        st.subheader("가입 상담 이력 전송")
+        ctx = st.session_state.signup_context
+        st.info(f"**상품명**: {ctx.get('product_name')}")
+
+        can_send_signup = bool(st.session_state.get("user_email"))
+        if st.button("상담내역 메일로 받기", disabled=not can_send_signup, use_container_width=True):
+            with st.spinner("상담 내역을 메일로 보내는 중..."):
+                product_name = ctx.get('product_name')
+                safe_filename = create_safe_filename(product_name)
+                resp = send_email_with_resp(
+                    to_addr=st.session_state.user_email,
+                    subject=f"[우리은행] {product_name} 가입 상담 내역입니다.",
+                    pdf_path=ctx.get("pdf_path"),
+                    text=ctx.get("summary"),
+                    html=ctx.get("summary").replace("\n", "<br>"),
+                    attachment_filename=safe_filename
+                )
+            if resp.ok:
+                st.success("발송 완료! 메일함을 확인해 주세요.")
+                st.session_state.signup_context = None # 상태 초기화
+            else:
+                st.error(f"전송 실패({resp.status_code}): {resp.detail or ''}")
     
-    # 2) 추천 결과 표시 (개선된 코드)
+    # 2) 추천 결과 표시
     if "profile" in st.session_state:
         rec_df = recommend(st.session_state.profile)
 
@@ -290,12 +319,15 @@ with st.sidebar:
                     can_send = bool(st.session_state.get("user_email"))
                     if st.button("메일로", key=f"mail_{row['product_code']}", disabled=not can_send, use_container_width=True):
                         with st.spinner("메일 전송 중…"):
+                            product_name = row['product']
+                            safe_filename = create_safe_filename(product_name)
                             resp = send_email_with_resp(
                                 to_addr=st.session_state.user_email,
-                                subject=f"[우리은행] {row['product']} 상품설명서",
+                                subject=f"[우리은행] {product_name} 상품설명서",
                                 pdf_path=pdf_path_str,
                                 text="첨부된 상품설명서를 확인해 주세요.",
                                 html="첨부된 상품설명서를 확인해 주세요.",
+                                attachment_filename=safe_filename
                             )
                         if resp.ok:
                             st.success("발송 완료!")
