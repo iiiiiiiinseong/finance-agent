@@ -1,4 +1,7 @@
 # mcp_server/main.py
+"""
+MCP server 실행. uvicorn mcp_server.main:app --reload
+"""
 from fastapi import FastAPI, UploadFile, status, Depends, Form, HTTPException
 from fastapi.security import APIKeyHeader
 from fastapi.responses import JSONResponse
