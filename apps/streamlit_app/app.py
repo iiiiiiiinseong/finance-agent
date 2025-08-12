@@ -181,18 +181,22 @@ if "user_email" not in st.session_state:
     st.session_state.user_email = ""
 
 def run_query(q: str):
-    """그래프 실행 + 히스토리/컨텍스트 저장"""    
-    st.session_state.history.append({"role":"user","content":q})
+    """그래프 실행 + 히스토리/컨텍스트 저장"""
+    # 이전 히스토리 로드
+    previous_history = st.session_state.history or []
+    print(f"DEBUG:\n previous_history:{previous_history}\n")
+    st.session_state.history.append({"role": "user", "content": q})
+    
     with st.spinner("AI가 답변을 생성 중입니다..."):
-        res = router_invoke(q)
-    answer = res.get("answer","죄송합니다. 답변을 준비 중입니다.")
-    st.session_state.history.append({"role":"assistant","content":answer})
-    st.session_state.last_context = res.get("context","")
+        res = router_invoke(q, history=previous_history)
+    
+    answer = res.get("answer", "죄송합니다. 답변을 준비 중입니다.")
+    st.session_state.history.append({"role": "assistant", "content": answer})
+    st.session_state.last_context = res.get("context", "")
 
     # advise 라벨이면 추천 표 자동 펼치기
     if "가입 상담" in answer or "추천" in answer:
         st.sidebar.write("### 추천 결과는 사이드바를 확인하세요!")
-        # 첫 번째 추천 상품 표 → 마크다운
         first_pdf = rec_df.iloc[0]["pdf_path"]
         tbl_md = parse_table(first_pdf).head(8).to_markdown(index=False)
         answer += "\n\n**주요 조건 요약**\n" + tbl_md
