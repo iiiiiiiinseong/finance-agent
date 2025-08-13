@@ -1,4 +1,4 @@
-# build_faq_index.py
+# scripts/build_faq_index.py
 
 """
 build_faq_index.py
