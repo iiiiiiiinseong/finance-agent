@@ -1,4 +1,4 @@
-# index_builder.py
+# data/embeddings/index_builder.py
 
 """
 FAQ 인덱스를 '존재하면 로드, 없으면 새로 빌드' 방식으로 가져오는 헬퍼.
