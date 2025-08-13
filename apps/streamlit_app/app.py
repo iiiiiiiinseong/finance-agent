@@ -16,13 +16,10 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from services.orchestrator.router_node import invoke as router_invoke
 from services.email.adapter import send_email_with_resp
-from config import LLM_MODEL, OPENAI_API_KEY, ROOT_DIR
+from config import LLM_MODEL, OPENAI_API_KEY, ROOT_DIR, DATA_DIR
 import base64
 
 # ---- 초기화 -------------------------------------------------------
-load_dotenv(dotenv_path=Path(__file__).parents[2] / ".env.streamlit")
-assert OPENAI_API_KEY, "OPENAI_API_KEY is not set in .env"
-
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 st.set_page_config(page_title="우리은행 AI 컨시어지 챗봇 🏦", page_icon="🏦", layout="wide")
@@ -36,7 +33,7 @@ st.markdown(
 )
 
 # ---- Helper -------------------------------------------------------
-DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "faq_woori_structured.jsonl"
+DATA_PATH = DATA_DIR / "processed" / "faq_woori_structured.jsonl"
 
 def create_safe_filename(product_name: str) -> str:
     """상품명을 안전한 파일명으로 변환합니다 (공백->_, 특수문자 제거)."""
@@ -290,25 +287,21 @@ with st.sidebar:
             # PDF 경로 및 존재 여부를 한 번만 확인
             pdf_path_str = row.get("pdf_path")
 
-            if not isinstance(pdf_path_str, str) or not pdf_path_str:
-                st.caption("PDF 파일 정보가 없습니다.")
-            else:
+            full_pdf_path = None
+            if isinstance(pdf_path_str, str) and pdf_path_str:
                 full_pdf_path = ROOT_DIR / pdf_path_str
-                pdf_exists = full_pdf_path.exists()
 
             # 3개의 컬럼 생성
             col1, col2, col3 = st.columns(3)
 
-            if pdf_exists:
-                pdf_path = Path(pdf_path_str)
-                
+            if full_pdf_path and full_pdf_path.exists():
                 # --- PDF 다운로드 버튼 ---
                 with col1:
-                    with open(pdf_path, "rb") as fp:
+                    with open(full_pdf_path, "rb") as fp:
                         st.download_button(
                             label="PDF다운로드",
                             data=fp.read(),
-                            file_name=pdf_path.name,
+                            file_name=full_pdf_path.name,
                             mime="application/pdf",
                             key=f"dl_{row['product_code']}",
                             use_container_width=True,
