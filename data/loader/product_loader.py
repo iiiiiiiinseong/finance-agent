@@ -24,7 +24,7 @@ from langchain.schema import Document
 
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from config import LLM_MODEL, OPENAI_API_KEY
+from config import LLM_MODEL, OPENAI_API_KEY, ROOT_DIR
 
 # ──────────────────────────────────────────────────────────────
 __all__ = ["load_docs"]
@@ -180,7 +180,8 @@ def load_docs(
         # 2) 섹션 & attrs
         attrs_added=False
         for sec, txt in _split_sections(full_tx):
-            base = {**meta, "section": sec, "pdf_path": str(pdf)}
+            relative_pdf_path = str(pdf.relative_to(ROOT_DIR)).replace('\\', '/')
+            base = {**meta, "section": sec, "pdf_path": relative_pdf_path}
             if not attrs_added and sec.startswith("거래"):
                 try:
                     attrs = _attrs_llm(txt)
@@ -191,7 +192,7 @@ def load_docs(
                 attrs_added=True
             for chunk in splitter.split_text(txt):
                 docs.append(Document(page_content=chunk, metadata=base))
-        metas.append({**meta, "pdf_path": str(pdf)})
+        metas.append({**meta, "pdf_path": relative_pdf_path})
 
     if save_jsonl:
         out = Path(__file__).resolve().parents[2] / "data/processed/product_deposit.jsonl"

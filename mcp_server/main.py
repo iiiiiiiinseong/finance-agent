@@ -14,7 +14,7 @@ import os, ssl, asyncio, logging
 from pathlib import Path
 from dotenv import load_dotenv
 
-dotenv_path = Path('.') / '.env.mcp' 
+dotenv_path = Path(__file__).resolve().parents[1] / ".env.mcp"
 load_dotenv(dotenv_path=dotenv_path)
 
 # ---------- ENV ----------

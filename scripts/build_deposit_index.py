@@ -1,4 +1,4 @@
-# build_deposit_index.py
+# scripts/build_deposit_index.py
 
 """
 build_deposit_index
@@ -31,7 +31,7 @@ def build_index(source: Path = SOURCE_JSONL, out_dir: Path = INDEX_PATH) -> FAIS
     )
 
     db = FAISS.from_documents(DOCS, emb)
-    db.save_local("index/deposit_faiss")
+    db.save_local(str(out_dir))
     logging.info("FAISS index saved → %s", out_dir)
 
     print(f"> {len(DOCS):,} chunks indexed")

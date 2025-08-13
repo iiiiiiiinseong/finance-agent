@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from services.orchestrator.router_node import invoke as router_invoke
 from services.email.adapter import send_email_with_resp
-from config import LLM_MODEL, OPENAI_API_KEY
+from config import LLM_MODEL, OPENAI_API_KEY, ROOT_DIR
 import base64
 
 # ---- 초기화 -------------------------------------------------------
@@ -289,7 +289,12 @@ with st.sidebar:
 
             # PDF 경로 및 존재 여부를 한 번만 확인
             pdf_path_str = row.get("pdf_path")
-            pdf_exists = isinstance(pdf_path_str, str) and Path(pdf_path_str).exists()
+
+            if not isinstance(pdf_path_str, str) or not pdf_path_str:
+                st.caption("PDF 파일 정보가 없습니다.")
+            else:
+                full_pdf_path = ROOT_DIR / pdf_path_str
+                pdf_exists = full_pdf_path.exists()
 
             # 3개의 컬럼 생성
             col1, col2, col3 = st.columns(3)
@@ -312,7 +317,7 @@ with st.sidebar:
                 # --- PDF 보기 버튼 ---
                 with col2:
                     if st.button("미리보기", key=f"view_{row['product_code']}", use_container_width=True):
-                        st.session_state.view_pdf = pdf_path_str
+                        st.session_state.view_pdf = str(full_pdf_path)
                 
                 # --- 메일로 전송 버튼 ---
                 with col3:
@@ -324,7 +329,7 @@ with st.sidebar:
                             resp = send_email_with_resp(
                                 to_addr=st.session_state.user_email,
                                 subject=f"[우리은행] {product_name} 상품설명서",
-                                pdf_path=pdf_path_str,
+                                pdf_path=str(full_pdf_path),
                                 text="첨부된 상품설명서를 확인해 주세요.",
                                 html="첨부된 상품설명서를 확인해 주세요.",
                                 attachment_filename=safe_filename
