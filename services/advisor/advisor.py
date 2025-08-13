@@ -12,10 +12,10 @@ from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 
-from config import OPENAI_API_KEY, LLM_MODEL
+from config import OPENAI_API_KEY, LLM_MODEL, ROOT_DIR
 
 LLM_ADVISOR = ChatOpenAI(model=LLM_MODEL, temperature=0, openai_api_key=OPENAI_API_KEY)
-PDF_META_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "product_deposit.jsonl"
+PDF_META_PATH = ROOT_DIR / "data" / "processed" / "product_deposit.jsonl"
 PRODUCT_DF = pd.read_json(PDF_META_PATH, lines=True)
 
 # --- 1. 가입 의사 및 상품명 추출 모델 ---

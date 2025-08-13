@@ -7,14 +7,9 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from requests_toolbelt.multipart.encoder import MultipartEncoder, MultipartEncoderMonitor
 from .schemas import EmailSendRequest, EmailSendResponse
+from config import MCP_URL, MCP_API_KEY, MCP_MAX_BYTES
 
 logger = logging.getLogger(__name__)
-
-MCP_URL = os.getenv("MCP_URL", "http://127.0.0.1:8000/v1/messages")  # 로컬 기본
-MCP_API_KEY = os.getenv("MCP_API_KEY", "")
-
-# 10MB 제한 기준
-MAX_BYTES = 10 * 1024 * 1024
 
 def _session() -> requests.Session:
     s = requests.Session()
@@ -80,7 +75,7 @@ def send_email_with_resp(
             # 파일이 존재하지 않으면 경고만 로깅하고, 첨부 없이 진행
             logger.warning(f"PDF file not found at {pdf_path}, sending email without attachment.")
             path_obj = None # 경로를 다시 None으로 설정
-        elif path_obj.stat().st_size > MAX_BYTES:
+        elif path_obj.stat().st_size > MCP_MAX_BYTES:
             return EmailSendResponse(ok=False, status_code=413, detail="Attachment exceeds 10MB")
     
     req = EmailSendRequest(to=to_addr, subject=subject, text=text, html=html)
